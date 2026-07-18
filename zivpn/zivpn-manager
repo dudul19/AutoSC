@@ -13,10 +13,18 @@ LIGHT_GREEN='\033[1;32m'
 NC='\033[0m' # No Color
 
 # ─── License Info ───
-LICENSE_URL="https://raw.githubusercontent.com/Fitunnel/FiZivpn/main/ip"
-LICENSE_INFO_FILE="/etc/zivpn/.license_info"
 CONFIG_DIR="/etc/zivpn"
 TELEGRAM_CONF="${CONFIG_DIR}/telegram.conf"
+REPO='https://raw.githubusercontent.com/dudul19/autosc/main/zivpn/'
+
+tgl=$(date -d "$masaaktif days" +"%d")
+bln=$(date -d "$masaaktif days" +"%b")
+thn=$(date -d "$masaaktif days" +"%Y")
+expe="$tgl $bln, $thn"
+tgl2=$(date +"%d")
+bln2=$(date +"%b")
+thn2=$(date +"%Y")
+tnggl="$tgl2 $bln2, $thn2"
 
 # ─── Pre-flight Checks ───
 if [ "$(id -u)" -ne 0 ]; then
@@ -42,101 +50,6 @@ function send_telegram_notification() {
             curl -s -X POST "$api_url" -d "chat_id=${TELEGRAM_CHAT_ID}" --data-urlencode "text=${message}" -d "parse_mode=Markdown" > /dev/null
         fi
     fi
-}
-
-# ─── License Verification Function ───
-function verify_license() {
-    echo "Verifying installation license..."
-    local SERVER_IP
-    SERVER_IP=$(cat /etc/zivpn/ip.txt)
-    if [ -z "$SERVER_IP" ]; then
-        echo -e "${RED}Failed to retrieve server IP. Please check your internet connection.${NC}"
-        exit 1
-    fi
-
-    local license_data
-    license_data=$(curl -s "$LICENSE_URL")
-    if [ $? -ne 0 ] || [ -z "$license_data" ]; then
-        echo -e "${RED}Gagal terhubung ke server lisensi. Mohon periksa koneksi internet Anda.${NC}"
-        exit 1
-    fi
-
-    local license_entry
-    license_entry=$(echo "$license_data" | grep -w "$SERVER_IP")
-
-    if [ -z "$license_entry" ]; then
-        echo -e "${RED}Verifikasi Lisensi Gagal! IP Anda tidak terdaftar. IP: ${SERVER_IP}${NC}"
-        exit 1
-    fi
-
-    local client_name
-    local expiry_date_str
-    client_name=$(echo "$license_entry" | awk '{print $1}')
-    expiry_date_str=$(echo "$license_entry" | awk '{print $2}')
-
-    local expiry_timestamp
-    expiry_timestamp=$(date -d "$expiry_date_str" +%s)
-    local current_timestamp
-    current_timestamp=$(date +%s)
-
-    if [ "$expiry_timestamp" -le "$current_timestamp" ]; then
-        echo -e "${RED}Verifikasi Lisensi Gagal! Lisensi untuk IP ${SERVER_IP} telah kedaluwarsa. Tanggal Kedaluwarsa: ${expiry_date_str}${NC}"
-        exit 1
-    fi
-    
-    echo -e "${LIGHT_GREEN}Verifikasi Lisensi Berhasil! Client: ${client_name}, IP: ${SERVER_IP}${NC}"
-    sleep 2 # Brief pause to show the message
-    
-    mkdir -p /etc/zivpn
-    echo "CLIENT_NAME=${client_name}" > "$LICENSE_INFO_FILE"
-    echo "EXPIRY_DATE=${expiry_date_str}" >> "$LICENSE_INFO_FILE"   
-}
-
-update_expiry_from_license_url() {
-    echo "Syncing expiry license..."
-
-    local SERVER_IP
-    SERVER_IP=$(cat /etc/zivpn/ip.txt)
-    if [ -z "$SERVER_IP" ]; then
-        echo -e "${RED}Gagal mendapatkan IP server${NC}"
-        return 1
-    fi
-
-    local license_data
-    license_data=$(curl -s "$LICENSE_URL")
-    if [ $? -ne 0 ] || [ -z "$license_data" ]; then
-        echo -e "${RED}Gagal mengambil data lisensi${NC}"
-        return 1
-    fi
-
-    local license_entry
-    license_entry=$(echo "$license_data" | grep -w "$SERVER_IP")
-    if [ -z "$license_entry" ]; then
-        echo -e "${RED}IP tidak terdaftar di lisensi${NC}"
-        return 1
-    fi
-
-    # Ambil data dari server lisensi
-    local CLIENT_NAME NEW_EXP_FROM_SERVER
-    CLIENT_NAME=$(echo "$license_entry" | awk '{print $1}')
-    NEW_EXP_FROM_SERVER=$(echo "$license_entry" | awk '{print $2}')
-
-    # Validasi tanggal
-    if ! date -d "$NEW_EXP_FROM_SERVER" >/dev/null 2>&1; then
-        echo -e "${RED}Format tanggal EXP dari server tidak valid${NC}"
-        return 1
-    fi
-
-    mkdir -p "$CONFIG_DIR"
-
-    cat > "$LICENSE_INFO_FILE" <<EOF
-CLIENT_NAME=${CLIENT_NAME}
-EXPIRY_DATE=${NEW_EXP_FROM_SERVER}
-EOF
-
-    echo -e "${LIGHT_GREEN}Sinkronisasi lisensi berhasil!${NC}"
-    echo -e "Client  : ${CLIENT_NAME}"
-    echo -e "Expiry  : ${NEW_EXP_FROM_SERVER}"
 }
 
 # ─── Utility Functions ───
@@ -178,7 +91,6 @@ restart_zivpn
 # Tambahkan ini
 local EXPIRE_FORMATTED
 EXPIRE_FORMATTED=$(date -d "@$expiry_date" +"%d %B %Y %H:%M")
-ip=$(cat /etc/zivpn/ip.txt)
 isp=$(cat /etc/zivpn/isp.txt)
 CERT_CN=$(openssl x509 -in /etc/zivpn/zivpn.crt -noout -subject | sed -n 's/.*CN = \([^,]*\).*/\1/p')
 local host
@@ -188,27 +100,24 @@ else
 host=$CERT_CN
 fi
 clear
-echo "Success:"
-echo "CREATE AKUN ZIVPN"
-echo "┌────────────────────────┐"
-echo "│ Host   : $host"
-echo "│ IP     : $ip"
-echo "│ ISP    : $isp"
-echo "│ Pass   : $password"
-echo "│ Expire : $EXPIRE_FORMATTED"
-echo "└────────────────────────┘"
-echo "Terima kasih telah menggunakan layanan kami"
+echo "─────────"
+echo "ZIVPN Account"
+echo "─────────"
+echo "Host      : $host"
+echo "ISP       : $isp"
+echo "Pass      : $password"
+echo "─────────"
+echo "Create at : $tnggl"
+echo "Expired   : $EXPIRE_FORMATTED"
+echo "─────────"
 # ─── Notifikasi Telegram (CREATE) ───
 local message=$(cat <<EOF
-CREATE AKUN ZIVPN
-┌────────────────────────┐
-│ Host   : $host
-│ IP     : $ip
-│ ISP    : $isp
-│ Pass   : $password
-│ Expire : $EXPIRE_FORMATTED
-└────────────────────────┘
-Terima kasih telah menggunakan layanan kami
+<b>┌─ ❖ TRANSACTION SUCCESSFULL ────────┐</b>
+<b>│</b>
+<b>│ Product :</b> ZIVPN
+<b>│ ISP :</b> <code>${isp}</code>
+<b>│ Duration :</b> <code>${EXPIRE_FORMATTED}</code>
+<b>└────────────────────────────────────┘</b>
 EOF
 )
 
@@ -224,16 +133,20 @@ send_telegram_notification "$message"
 
 # ─── Core Logic Functions ───
 function create_manual_account() {
-    echo "───────── Create New Zivpn Account ───────"
-    read -p "Enter new password: " password
+    echo "┌─ ❖ Create ZIVPN Account ──────────┐"
+    echo "│"
+    echo "│ Input passworrd [ex: dudul69]"
+    echo "│ Active period [ex: 10] for 10 day"
+    echo "└────────────────────────────────────┘"
+    read -p " Enter new password: " password
     if [ -z "$password" ]; then
-        echo "Password cannot be empty."
+        echo " Password cannot be empty."
         return
     fi
 
-    read -p "Enter active period (in days): " days
+    read -p " Enter active period: " days
     if ! [[ "$days" =~ ^[0-9]+$ ]]; then
-        echo "Invalid number of days."
+        echo " Invalid number of days."
         return
     fi
 
@@ -267,14 +180,14 @@ function create_manual_account() {
         echo "$result"
     fi
     
-    read -p "Tekan Enter untuk kembali ke menu..."
+    read -p "Press any key to back"
 }
 
 function _generate_api_key() {
     clear
-    echo "─── Generate API Authentication Key ───"
+    echo "┌─ ❖ Generate API Key ──────────────┐"
+    echo
     
-    # Generate a 6-character alphanumeric key
     local api_key
     api_key=$(LC_ALL=C tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c 6)
     
@@ -283,10 +196,12 @@ function _generate_api_key() {
     echo "$api_key" > "$key_file"
     chmod 600 "$key_file"
     
-    echo "New API authentication key has been generated and saved."
-    echo "Key: ${api_key}"
+    clear
+    echo "┌─ ❖ Generate API Key ──────────────┐"
+    echo "|"
+    echo "| Key: ${api_key}"
+    echo "└────────────────────────────────────┘"
     
-    echo "Sending API key to Telegram..."
     # Get Server IP and Domain for the notification
     local server_ip
     server_ip=$(cat /etc/zivpn/ip.txt)
@@ -301,35 +216,36 @@ function _generate_api_key() {
     
     /usr/local/bin/zivpn_helper.sh api-key-notification "$api_key" "$server_ip" "$domain"
     
-    read -p "Tekan Enter untuk kembali ke menu..."
+    read -p "Press any key to back"
 }
 
 function _lihat_api_key() {
     clear
-    echo "─── Lihat API Authentication Key ───"
-
+    echo "┌─ ❖ Check API Key ─────────────────┐"
+    echo "|"
     local key_file="/etc/zivpn/api_auth.key"
 
     if [ ! -f "$key_file" ]; then
-        echo "API key belum dibuat!"
-        echo "Silakan generate API key terlebih dahulu."
-        read -p "Tekan Enter untuk kembali..."
+        echo "| API key has not been created!"
+        echo "| Please generate an API key first."
+        echo "└────────────────────────────────────┘"
+        echo
+        read -p "Press any key to back"
         return
     fi
 
     local api_key
     api_key=$(cat "$key_file")
 
-    echo ""
-    echo "API Authentication Key:"
-    echo "-----------------------"
-    echo "Key: ${api_key}"
-    echo ""
-    echo "Lokasi file: $key_file"
-    echo "Permission : $(stat -c %a "$key_file")"
-    echo ""
 
-    read -p "Tekan Enter untuk kembali ke menu..."
+    echo "| Key: ${api_key}"
+    echo "|"
+    echo "| Location   : $key_file"
+    echo "| Permission : $(stat -c %a "$key_file")"
+    echo "└────────────────────────────────────┘"
+    echo
+
+    read -p "Press any key to back"
 }
 
 function _create_trial_account_logic() {
@@ -363,28 +279,25 @@ else
 host=$CERT_CN
 fi            
 clear
-echo "Success:"
-echo "TRIAL AKUN ZIVPN"
-echo "┌────────────────────────┐"
-echo "│ Host   : $host"
-echo "│ IP     : $ip"
-echo "│ ISP    : $isp"
-echo "│ Pass   : $password"
-echo "│ Expire : $EXPIRE_FORMATTED"
-echo "└────────────────────────┘"
-echo "Terima kasih telah menggunakan layanan kami"
+echo "─────────"
+echo "Trial ZIVPN Account"
+echo "─────────"
+echo "Host      : $host"
+echo "ISP       : $isp"
+echo "Pass      : $password"
+echo "─────────"
+echo "Create at : $tnggl"
+echo "Expired   : $EXPIRE_FORMATTED"
+echo "─────────"
 
 # ─── Notifikasi Telegram (TRIAL) ───
 local message=$(cat <<EOF
-TRIAL AKUN ZIVPN
-┌────────────────────────┐
-│ Host   : $host
-│ IP     : $ip
-│ ISP    : $isp
-│ Pass   : $password
-│ Expire : $EXPIRE_FORMATTED
-└────────────────────────┘
-Terima kasih telah mencoba layanan kami
+<b>┌─ ❖ TRANSACTION SUCCESSFULL ────────┐</b>
+<b>│</b>
+<b>│ Product :</b> Trial ZIVPN
+<b>│ ISP :</b> <code>${isp}</code>
+<b>│ Duration :</b> <code>${EXPIRE_FORMATTED}</code>
+<b>└────────────────────────────────────┘</b>
 EOF
 )
 
@@ -398,10 +311,13 @@ send_telegram_notification "$message"
 }
 
 function create_trial_account() {    
-    echo "─────── Create Trial Zivpn Account ───────"
-    read -p "Enter active period (in minutes): " minutes
+    echo "┌─ ❖ Create Trial ZIVPN Account ────┐"
+    echo "|"
+    echo "│ Enter minutes [ex: 30] for 30 min"
+    echo "└────────────────────────────────────┘"
+    read -p " Enter active period: " minutes
     if ! [[ "$minutes" =~ ^[0-9]+$ ]]; then
-        echo "Invalid number of minutes."
+        echo " Invalid number of minutes."
         return
     fi
 
@@ -436,7 +352,7 @@ function create_trial_account() {
         echo "$result"
     fi
     
-    read -p "Tekan Enter untuk kembali ke menu..."
+    read -p "Press any key to back"
 }
 
 function _renew_account_logic() {
@@ -487,37 +403,20 @@ else
 host=$CERT_CN
 fi
 clear
-echo "Success:"
-echo "RENEW AKUN ZIVPN"
-echo "┌────────────────────────┐"
-echo "│ Host   : $host"
-echo "│ IP     : $ip"
-echo "│ ISP    : $isp"
-echo "│ Pass   : $password"
-echo "│ Expire : $new_expiry_formatted"
-echo "└────────────────────────┘"
-echo "Terima kasih telah menggunakan layanan kami"
-# ─── Notifikasi Telegram (RENEW) ───
-local message=$(cat <<EOF
-RENEW AKUN ZIVPN
-┌────────────────────────┐
-│ Host   : $host
-│ IP     : $ip
-│ ISP    : $isp
-│ Pass   : $password
-│ Expire : $new_expiry_formatted
-└────────────────────────┘
-Terima kasih telah menggunakan layanan kami
-EOF
-)
+echo "┌─ ❖ Renew ZIVPN Account ───────────┐"
+echo "|"
+echo "| ISP         : $isp"
+echo "| Pass        : $password"
+echo "│ New Expired : $new_expiry_formatted"
+echo "└────────────────────────────────────┘"
 
-send_telegram_notification "$message"
-    return 0
+return 0
 }
 
 function renew_account() {
     clear
-    echo "───────────── Renew Account ──────────────"
+    echo "┌─ ❖ Renew ZIVPN Account ───────────┐"
+    echo
     _display_accounts
     echo "" # Add a newline for better spacing
     read -p "Enter password to renew: " password
@@ -546,7 +445,7 @@ function renew_account() {
     else
         echo "$result"
     fi
-    read -p "Tekan Enter untuk kembali ke menu..."
+    read -p "Press any key to back"
 }
 
 function _delete_account_logic() {
@@ -586,31 +485,13 @@ else
 host=$CERT_CN
 fi
 clear
-echo "Success:"
-echo "DELETE AKUN ZIVPN"
-echo "┌────────────────────────┐"
-echo "│ Host   : $host"
-echo "│ IP     : $ip"
-echo "│ ISP    : $isp"
-echo "│ Pass   : $password"
+echo "┌─ ❖ Delete ZIVPN Account ──────────┐"
+echo "|"
+echo "| ISP    : $isp"
+echo "| Pass   : $password"
 echo "│ Status : Deleted"
-echo "└────────────────────────┘"
-echo "Terima kasih telah menggunakan layanan kami"
-# ─── Notifikasi Telegram (DELETE) ───
-local message=$(cat <<EOF
-DELETE AKUN ZIVPN
-┌────────────────────────┐
-│ Host   : $host
-│ IP     : $ip
-│ ISP    : $isp
-│ Pass   : $password
-│ Status : Deleted
-└────────────────────────┘
-Terima kasih telah menggunakan layanan kami
-EOF
-)
+echo "└────────────────────────────────────┘"
 
-send_telegram_notification "$message"
         return 0
     else
         # If config update fails, do not touch the db file and report error
@@ -622,7 +503,8 @@ send_telegram_notification "$message"
 
 function delete_account() {
     clear
-    echo "───────────── Delete Account ─────────────"
+    echo "┌─ ❖ Delete ZIVPN Account ──────────┐"
+    echo
     _display_accounts
     echo "" # Add a newline for better spacing
     read -p "Enter password to delete: " password
@@ -639,7 +521,8 @@ function delete_account() {
 }
 
 function change_domain() {
-    echo "─────────────── Change Domain ───────────────"
+    echo "┌─ ❖ Change Domain ─────────────────┐"
+    echo
     read -p "Enter the new domain name for the SSL certificate: " domain
     if [ -z "$domain" ]; then
         echo "Domain name cannot be empty."
@@ -700,10 +583,11 @@ function _display_accounts() {
 
 function list_accounts() {
     clear
-    echo "──────────── Active Accounts ─────────────"
+    echo "┌─ ❖ Active Account ────────────────┐"
+    echo
     _display_accounts
     echo "" # Add a newline for better spacing
-    read -p "Press Enter to return to the menu..."
+    read -p "Press any key to back"
 }
 
 function format_kib_to_human() {
@@ -787,7 +671,7 @@ bw_month=$(vnstat -m | awk '/'"$(date +%Y-%m)"'/ {print $5 " " $6}')
 _save_total_users
 total_users=$(cat /etc/zivpn/total_users.txt)
 apikey=$(cat /etc/zivpn/api_auth.key)
-VERSI_URL="https://raw.githubusercontent.com/Fitunnel/FiZivpn/main/versi.txt"
+VERSI_URL="${REPO}versi.txt"
 versisc=$(curl -fsSL "$VERSI_URL" 2>/dev/null | tr -d ' \r\n')
 if [ -z "$versisc" ]; then
   versisc="UNKNOWN"
@@ -958,11 +842,8 @@ function show_menu() {
     fi
 
     clear
-    figlet "UDP ZIVPN" | lolcat
     
     echo -e "${YELLOW}┌───────────// ${CYAN}PT RAJA SERVER PREMIUM${YELLOW} //─────────────┐${NC}"
-    _draw_info_panel
-    _draw_service_status
     echo -e "${YELLOW}│                                                    │${NC}"
     echo -e "${YELLOW}│   ${LIGHT_BLUE}1)${NC} ${BOLD_WHITE}Create Account                                ${YELLOW}│${NC}"
     echo -e "${YELLOW}│   ${LIGHT_BLUE}2)${NC} ${BOLD_WHITE}Renew Account                                 ${YELLOW}│${NC}"
@@ -974,7 +855,6 @@ function show_menu() {
     echo -e "${YELLOW}│   ${LIGHT_BLUE}8)${NC} ${BOLD_WHITE}View API Auth Key                             ${YELLOW}│${NC}"
     echo -e "${YELLOW}│   ${LIGHT_BLUE}9)${NC} ${BOLD_WHITE}Restart Service                               ${YELLOW}│${NC}"
     echo -e "${YELLOW}│  ${LIGHT_BLUE}10)${NC} ${BOLD_WHITE}Update Script Verison                         ${YELLOW}│${NC}"
-    echo -e "${YELLOW}│  ${LIGHT_BLUE}11)${NC} ${BOLD_WHITE}Update License Expiry                         ${YELLOW}│${NC}"
     echo -e "${YELLOW}│  ${LIGHT_BLUE}12)${NC} ${BOLD_WHITE}Speedtest Server                              ${YELLOW}│${NC}"
     echo -e "${YELLOW}│  ${LIGHT_BLUE}13)${NC} ${BOLD_WHITE}Fix Error ZIVPN                               ${YELLOW}│${NC}"
     echo -e "${YELLOW}│   ${LIGHT_BLUE}0)${NC} ${BOLD_WHITE}Exit                                          ${YELLOW}│${NC}"
@@ -993,10 +873,9 @@ function show_menu() {
         7) _generate_api_key ;;
         8) _lihat_api_key ;;
         9) systemctl restart zivpn.service --no-block && systemctl restart zivpn-udp.service --no-block && read -p "Tekan Enter untuk kembali ke menu..." && /usr/local/bin/zivpn-manager ;;
-        10) wget -q https://raw.githubusercontent.com/Fitunnel/FiZivpn/main/update.sh -O /usr/local/bin/update-manager && chmod +x /usr/local/bin/update-manager && /usr/local/bin/update-manager && read -p "Tekan Enter untuk kembali ke menu..." && /usr/local/bin/zivpn-manager ;;
-        11) update_expiry_from_license_url && read -p "Tekan Enter untuk kembali ke menu..." && /usr/local/bin/zivpn-manager ;;
+        10) wget -q ${REPO}update.sh -O /usr/local/bin/update-manager && chmod +x /usr/local/bin/update-manager && /usr/local/bin/update-manager && read -p "Tekan Enter untuk kembali ke menu..." && /usr/local/bin/zivpn-manager ;;
         12) wget https://raw.githubusercontent.com/arivpnstores/v4/main/Cdy/speedtest -O /usr/bin/speedtest && chmod +x /usr/bin/speedtest && yes | /usr/bin/speedtest && read -p "Tekan Enter untuk kembali ke menu..." && /usr/local/bin/zivpn-manager ;;
-        13) wget -q https://raw.githubusercontent.com/Fitunnel/FiZivpn/main/fix-zivpn.sh -O /usr/local/bin/fix-zivpn.sh && chmod +x /usr/local/bin/fix-zivpn.sh && /usr/local/bin/fix-zivpn.sh && read -p "Tekan Enter untuk kembali ke menu..." && /usr/local/bin/zivpn-manager ;;
+        13) wget -q ${REPO}fix-zivpn.sh -O /usr/local/bin/fix-zivpn.sh && chmod +x /usr/local/bin/fix-zivpn.sh && /usr/local/bin/fix-zivpn.sh && read -p "Tekan Enter untuk kembali ke menu..." && /usr/local/bin/zivpn-manager ;;
         0) exit 0 ;;
         *) echo "Invalid option. Please try again." ;;
     esac
@@ -1047,7 +926,7 @@ case "$ARCH" in
     ;;
 esac
 echo "Terdeteksi arsitektur: $ARCH → pakai $FILE"
-wget -O /root/zi.sh "https://raw.githubusercontent.com/Fitunnel/FiZivpn/main/$FILE"
+wget -O /root/zi.sh "${REPO}${FILE}"
 
 echo "5. Beri izin executable..."
 chmod +x /root/zi.sh
@@ -1100,7 +979,7 @@ echo "Configuring vnstat for bandwidth monitoring..."
     
     # Download helper script from repository
     echo "Downloading helper script..."
-    wget -O /usr/local/bin/zivpn_helper.sh https://raw.githubusercontent.com/Fitunnel/FiZivpn/main/zivpn_helper.sh
+    wget -O /usr/local/bin/zivpn_helper.sh ${REPO}zivpn_helper.sh
     if [ $? -ne 0 ]; then
         echo "Failed to download helper script. Aborting."
         exit 1

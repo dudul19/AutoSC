@@ -36,11 +36,5 @@ echo "└───────────────────────�
 echo
 
 wget -q "${REPO}zivpn-manager" -O /usr/local/bin/zivpn-manager 2>/dev/null
+chmod +x /usr/local/bin/zivpn-manager
 
-if [ -f "/usr/local/bin/zivpn-manager" ]; then
-    chmod +x /usr/local/bin/zivpn-manager 
-    /usr/local/bin/zivpn-manager
-else
-    echo "[ ERROR ] Gagal mengunduh zivpn-manager. Periksa koneksi atau URL repo."
-    exit 1
-fi
